@@ -94,6 +94,34 @@ app.get("/", (req, res) => {
 });
 
 // ────────────────────────────────────────────────
+//  SSE STREAM ENDPOINT (Claude / Make requires this)
+// ────────────────────────────────────────────────
+app.get("/mcp/api/v1/sse", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  console.log("🧠 Make or Claude connected via SSE");
+
+  // Send a simple welcome event
+  res.write(`event: message\n`);
+  res.write(`data: {"status":"connected","message":"MCP SSE stream active"}\n\n`);
+
+  // Keep the connection alive
+  const interval = setInterval(() => {
+    res.write(`event: ping\n`);
+    res.write(`data: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
+  }, 10000);
+
+  // Handle client disconnect
+  req.on("close", () => {
+    console.log("❌ SSE client disconnected");
+    clearInterval(interval);
+  });
+});
+
+
+// ────────────────────────────────────────────────
 //  START SERVER
 // ────────────────────────────────────────────────
 app.listen(port, () => {
