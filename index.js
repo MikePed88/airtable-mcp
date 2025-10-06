@@ -106,30 +106,24 @@ app.post("/run", async (req, res) => {
 // ────────────────────────────────────────────────
 //  SSE STREAM  (Claude / Make handshake + keep-alive)
 // ────────────────────────────────────────────────
-app.post("/sse", (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders?.();
+app.all("/sse", (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+  });
 
   console.log("🧠  MCP client connected via /sse");
 
-  // required handshake
-  const handshake = {
-    jsonrpc: "2.0",
-    method: "handshake",
-    params: { protocol: "MCP", version: "1.0" },
-  };
-  res.write(`data: ${JSON.stringify(handshake)}\n\n`);
+  // 👇 exact first line Make expects
+  res.write(
+    `data: {"jsonrpc":"2.0","method":"handshake","params":{"protocol":"MCP","version":"1.0"}}\n\n`
+  );
 
-  // keep the stream alive
+  // keepalive pings every 5 s
   const interval = setInterval(() => {
     res.write(
-      `data: ${JSON.stringify({
-        jsonrpc: "2.0",
-        method: "ping",
-        params: { t: Date.now() },
-      })}\n\n`
+      `data: {"jsonrpc":"2.0","method":"ping","params":{"t":${Date.now()}}}\n\n`
     );
   }, 5000);
 
