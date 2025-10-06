@@ -16,6 +16,36 @@ app.use("/mcp", (req, res, next) => {
   next();
 });
 
+// alias /sse for Make compatibility
+app.post("/sse", (req, res) => {
+  // Just call your existing handler
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  console.log("🧠 Make connected via POST /sse");
+
+  // Standard MCP handshake
+  const handshake = {
+    jsonrpc: "2.0",
+    method: "handshake",
+    params: { protocol: "MCP", version: "1.0" },
+  };
+  res.write(`data: ${JSON.stringify(handshake)}\n\n`);
+
+  // Keep-alive pings
+  const interval = setInterval(() => {
+    res.write(`data: ${JSON.stringify({ jsonrpc: "2.0", method: "ping", params: { t: Date.now() } })}\n\n`);
+  }, 5000);
+
+  req.on("close", () => {
+    clearInterval(interval);
+    console.log("❌ Make disconnected from /sse");
+  });
+});
+
+
 // 🔹 Make expects to POST here to start the SSE stream
 app.post("/mcp/api/v1/sse", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
