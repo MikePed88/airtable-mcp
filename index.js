@@ -115,16 +115,27 @@ app.all("/sse", (req, res) => {
 
   console.log("🧠  MCP client connected via /sse");
 
-  // 👇 exact first line Make expects
-  res.write(
-    `data: {"jsonrpc":"2.0","method":"handshake","params":{"protocol":"MCP","version":"1.0"}}\n\n`
-  );
+  // 👇 valid JSON-RPC 2.0 handshake "result"
+  const handshake = {
+    jsonrpc: "2.0",
+    id: 1,
+    result: {
+      type: "handshake",
+      protocol: "MCP",
+      version: "1.0",
+      capabilities: { tools: true, run: true },
+    },
+  };
+  res.write(`data: ${JSON.stringify(handshake)}\n\n`);
 
-  // keepalive pings every 5 s
+  // keepalive pings
   const interval = setInterval(() => {
-    res.write(
-      `data: {"jsonrpc":"2.0","method":"ping","params":{"t":${Date.now()}}}\n\n`
-    );
+    const ping = {
+      jsonrpc: "2.0",
+      method: "ping",
+      params: { t: Date.now() },
+    };
+    res.write(`data: ${JSON.stringify(ping)}\n\n`);
   }, 5000);
 
   req.on("close", () => {
@@ -132,6 +143,7 @@ app.all("/sse", (req, res) => {
     console.log("❌  MCP client disconnected from /sse");
   });
 });
+
 
 // ────────────────────────────────────────────────
 //  ROOT CHECK
