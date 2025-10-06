@@ -1,6 +1,7 @@
 import express from "express";
 import fetch from "node-fetch";
-import { serveModelContextProtocol } from "model-context-protocol";
+import mcp from "model-context-protocol";
+const { serveModelContextProtocol } = mcp;
 
 const app = express();
 const port = process.env.PORT || 3000;
