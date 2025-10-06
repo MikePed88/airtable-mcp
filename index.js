@@ -113,23 +113,26 @@ app.post("/mcp/api/v1/sse", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
-  res.status(200);
+  res.flushHeaders?.();               // for Express 5+ or compression middleware
 
-  console.log("🧠 Make or Claude connected via POST /mcp/api/v1/sse");
+  console.log("🧠  Make or Claude connected via POST /mcp/api/v1/sse");
 
-  // Initial connection message
+  // 👇 initial handshake event Claude/Make expects
+  res.write(`event: model-context-protocol\n`);
+  res.write(`data: {"type":"connection","status":"ready","protocol":"MCP-1.0"}\n\n`);
+
+  // normal “connected” message (optional)
   res.write(`event: message\n`);
   res.write(`data: {"status":"connected","message":"MCP POST SSE stream active"}\n\n`);
 
-  // Periodic keepalive ping
+  // keep-alive pings every 10 s
   const interval = setInterval(() => {
     res.write(`event: ping\n`);
     res.write(`data: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
   }, 10000);
 
-  // Handle disconnect
   req.on("close", () => {
-    console.log("❌ SSE client disconnected");
+    console.log("❌  SSE client disconnected");
     clearInterval(interval);
   });
 });
