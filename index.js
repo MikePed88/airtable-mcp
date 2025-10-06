@@ -107,42 +107,50 @@ app.post("/run", async (req, res) => {
 //  SSE STREAM  (Claude / Make handshake + keep-alive)
 // ────────────────────────────────────────────────
 app.all("/sse", (req, res) => {
+  console.log("🧠 [MCP] Client connected to /sse");
+  console.log("🔹 Method:", req.method);
+  console.log("🔹 Headers:", req.headers);
+
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
   });
 
-  console.log("🧠  MCP client connected via /sse");
+  // log when headers have been sent
+  res.flushHeaders?.();
+  console.log("📡 [MCP] Response headers flushed to client");
 
-  // 👇 valid JSON-RPC 2.0 handshake "result"
-  const handshake = {
-    jsonrpc: "2.0",
-    id: 1,
-    result: {
-      type: "handshake",
-      protocol: "MCP",
-      version: "1.0",
-      capabilities: { tools: true, run: true },
-    },
+  // ---- Handshake message ----
+  const handshake = `data: {"jsonrpc":"2.0","method":"handshake","params":{"protocol":"MCP","version":"1.0"}}\n\n`;
+  console.log("📤 [MCP] Sending handshake:", handshake.trim());
+  res.write(handshake);
+
+  // ---- Keep-alive ping ----
+  const sendPing = () => {
+    const ping = `data: {"jsonrpc":"2.0","method":"ping","params":{"t":${Date.now()}}}\n\n`;
+    res.write(ping);
+    console.log("📤 [MCP] Sent ping:", ping.trim());
   };
-  res.write(`data: ${JSON.stringify(handshake)}\n\n`);
+  const interval = setInterval(sendPing, 5000);
 
-  // keepalive pings
-  const interval = setInterval(() => {
-    const ping = {
-      jsonrpc: "2.0",
-      method: "ping",
-      params: { t: Date.now() },
-    };
-    res.write(`data: ${JSON.stringify(ping)}\n\n`);
-  }, 5000);
+  // ---- Capture any incoming data (if Make writes anything) ----
+  req.on("data", chunk => {
+    console.log("📥 [MCP] Received data from client:", chunk.toString());
+  });
 
+  // ---- Monitor network lifecycle ----
+  req.on("aborted", () => console.log("⚠️ [MCP] Client aborted connection"));
+  req.on("error", err => console.error("❌ [MCP] Request error:", err));
+  res.on("error", err => console.error("❌ [MCP] Response error:", err));
+  res.on("close", () => console.log("🚪 [MCP] Response closed"));
   req.on("close", () => {
     clearInterval(interval);
-    console.log("❌  MCP client disconnected from /sse");
+    console.log("❌ [MCP] Client disconnected from /sse");
   });
 });
+
+
 
 
 // ────────────────────────────────────────────────
