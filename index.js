@@ -1,13 +1,12 @@
-// index.js
 import express from "express";
-import { serveModelContextProtocol } from "model-context-protocol/express";
 import fetch from "node-fetch";
+import { serveModelContextProtocol } from "model-context-protocol";
 
 const app = express();
 const port = process.env.PORT || 3000;
-
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 
+// Auth (optional but recommended)
 app.use("/mcp", (req, res, next) => {
   const token = req.headers.authorization?.replace("Bearer ", "");
   if (process.env.MCP_AUTH_TOKEN && token !== process.env.MCP_AUTH_TOKEN) {
@@ -16,23 +15,23 @@ app.use("/mcp", (req, res, next) => {
   next();
 });
 
-// ✅ Define MCP Tools
+// Define MCP tools
 const tools = [
   {
     name: "listBases",
-    description: "Fetch all Airtable bases accessible by the configured API key.",
+    description: "Fetches all Airtable bases.",
     inputSchema: {},
     outputSchema: { type: "object" },
     handler: async () => {
-      const response = await fetch("https://api.airtable.com/v0/meta/bases", {
+      const res = await fetch("https://api.airtable.com/v0/meta/bases", {
         headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
       });
-      return await response.json();
+      return await res.json();
     },
   },
   {
     name: "getRecords",
-    description: "Fetch records from a specific Airtable base and table.",
+    description: "Fetch records from a base and table.",
     inputSchema: {
       type: "object",
       properties: {
@@ -43,24 +42,22 @@ const tools = [
     },
     outputSchema: { type: "object" },
     handler: async ({ baseId, tableName }) => {
-      const response = await fetch(
+      const res = await fetch(
         `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`,
         { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` } }
       );
-      return await response.json();
+      return await res.json();
     },
   },
 ];
 
-// ✅ Plug in the MCP middleware
+// Serve as a proper MCP endpoint
 serveModelContextProtocol(app, { tools });
 
-// ✅ Optional: a root health route
 app.get("/", (req, res) => {
-  res.send("✅ Airtable MCP server (full MCP JSON-RPC implementation)");
+  res.send("✅ Full MCP server for Airtable ready!");
 });
 
-// ✅ Start the server
 app.listen(port, () => {
-  console.log(`🚀 Full MCP server running on port ${port}`);
+  console.log(`🚀 MCP server running on port ${port}`);
 });

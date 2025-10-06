@@ -1,5 +1,5 @@
 {
-  "name": "@felores/airtable-mcp-server",
+  "name": "@mikeped88/airtable-mcp-server",
   "version": "0.3.0",
   "description": "An Airtable Model Context Protocol Server",
   "type": "module",
@@ -29,11 +29,11 @@
     "@types/node": "^20.11.24",
     "typescript": "^5.3.3"
   },
-  "author": "Felipe Restrepo",
+  "author": "Mike",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/felores/airtable-mcp"
+    "url": "https://github.com/MikePed88/airtable-mcp"
   },
   "keywords": [
     "airtable",
