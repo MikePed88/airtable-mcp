@@ -1,9 +1,15 @@
 // index.js
 import express from "express";
 import fetch from "node-fetch";
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
+app.use(cors());
+
+// disable all compression and caching for SSE
+app.disable("etag");
+app.set("x-powered-by", false);
 
 // ENV VARS
 const port = process.env.PORT || 3000;
@@ -117,8 +123,7 @@ app.post("/mcp/api/v1/sse", (req, res) => {
 
   console.log("🧠  Make or Claude connected via POST /mcp/api/v1/sse");
 
-  // 👇 initial handshake event Claude/Make expects
-  res.write(`event: model-context-protocol\n`);
+// send initial data line that looks like a plain JSON payload
   res.write(`data: {"type":"connection","status":"ready","protocol":"MCP-1.0"}\n\n`);
 
   // normal “connected” message (optional)
@@ -126,10 +131,10 @@ app.post("/mcp/api/v1/sse", (req, res) => {
   res.write(`data: {"status":"connected","message":"MCP POST SSE stream active"}\n\n`);
 
   // keep-alive pings every 10 s
-  const interval = setInterval(() => {
-    res.write(`event: ping\n`);
-    res.write(`data: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
-  }, 10000);
+ const interval = setInterval(() => {
+  res.write(`event: ping\n`);
+  res.write(`data: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
+}, 2000);
 
   req.on("close", () => {
     console.log("❌  SSE client disconnected");
