@@ -9,6 +9,14 @@ app.use(express.json());
 const port = process.env.PORT || 3000;
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 
+app.use("/mcp", (req, res, next) => {
+  const token = req.headers.authorization?.replace("Bearer ", "");
+  if (process.env.MCP_AUTH_TOKEN && token !== process.env.MCP_AUTH_TOKEN) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+});
+
 // ────────────────────────────────────────────────
 //  HEALTH ENDPOINT (Claude / Make checks this first)
 // ────────────────────────────────────────────────
