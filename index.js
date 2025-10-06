@@ -68,7 +68,7 @@ const handshake = {
   result: {
     type: "handshake",
     protocol: "MCP",
-    protocolVersion: "1.0",
+    protocolVersion: "2024-11-05",
     serverInfo: {
       name: "Airtable MCP Server",
       version: "0.3.0"
