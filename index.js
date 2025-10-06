@@ -61,22 +61,31 @@ app.all(["/sse", "/mcp/api/v1/sse"], (req, res) => {
   res.flushHeaders?.();
   console.log("📡 [MCP] SSE headers flushed");
 
-  // --- Properly framed handshake ---
-  const handshake = {
-    jsonrpc: "2.0",
-    id: 0,
-    result: {
-      type: "handshake",
-      protocol: "MCP",
-      version: "1.0",
-      capabilities: { tools: true, run: true },
+// --- Properly framed handshake (Make schema-compliant) ---
+const handshake = {
+  jsonrpc: "2.0",
+  id: 0,
+  result: {
+    type: "handshake",
+    protocol: "MCP",
+    protocolVersion: "1.0",
+    serverInfo: {
+      name: "Airtable MCP Server",
+      version: "0.3.0"
     },
-  };
-  const frame =
-    `event: message\n` +
-    `data: ${JSON.stringify(handshake)}\n\n`;
-  res.write(frame);
-  console.log("📤 Sent handshake frame:\n" + frame);
+    capabilities: {
+      tools: {},
+      resources: {},
+      logging: {}
+    }
+  }
+};
+
+const frame =
+  `event: message\n` +
+  `data: ${JSON.stringify(handshake)}\n\n`;
+res.write(frame);
+console.log("📤 Sent Make-compliant handshake:\n" + frame);
 
   // --- keep-alive pings ---
   const interval = setInterval(() => {
