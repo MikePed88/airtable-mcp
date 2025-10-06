@@ -57,6 +57,11 @@ app.get("/mcp/api/v1/tools", (req, res) => {
   });
 });
 
+// redirect Make's POST /mcp/api/v1 to the proper SSE endpoint
+app.post("/mcp/api/v1", (req, res) => {
+  res.redirect(307, "/mcp/api/v1/sse");
+});
+
 // ────────────────────────────────────────────────
 //  TOOL EXECUTION ENDPOINT
 //  Claude / Make will POST { "tool": "<name>", "arguments": { ... } }
