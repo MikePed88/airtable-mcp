@@ -31,6 +31,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// Redirect Make’s POST / to the real SSE endpoint
+app.post("/", (req, res) => {
+  console.log("📨 Make POST / received, redirecting to /sse");
+  res.redirect(307, "/sse");
+});
+
 // ───────────────────────────────
 // Health check endpoint
 // ───────────────────────────────
