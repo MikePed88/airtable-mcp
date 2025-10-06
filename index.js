@@ -1,165 +1,181 @@
-// index.js
 import express from "express";
 import fetch from "node-fetch";
 
 const app = express();
 app.use(express.json());
 
+// ───────────────────────────────
+// Environment setup
+// ───────────────────────────────
 const port = process.env.PORT || 3000;
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const AUTH_TOKEN = process.env.MCP_AUTH_TOKEN;
+const MCP_AUTH_TOKEN = process.env.MCP_AUTH_TOKEN;
 
-/// ────────────────────────────────────────────────
-//  LOGGING MIDDLEWARE
-// ────────────────────────────────────────────────
-app.use((req, res, next) => {
-  console.log(`🔐 ${req.method} ${req.path}`);
-  console.log("Headers:", req.headers.authorization);
-  next();
-});
+// ───────────────────────────────
+// Utility logging helper
+// ───────────────────────────────
+const log = (msg, ...args) => console.log(`[${new Date().toISOString()}] ${msg}`, ...args);
 
-// ────────────────────────────────────────────────
-//  SIMPLE AUTH  (optional but recommended)
-// ────────────────────────────────────────────────
+// ───────────────────────────────
+// Authorization middleware
+// ───────────────────────────────
 app.use((req, res, next) => {
-  // only protect the API routes (skip root GET /)
-  if (["/health", "/tools", "/run", "/sse"].includes(req.path)) {
-    const token = req.headers.authorization?.replace("Bearer ", "");
-    if (AUTH_TOKEN && token !== AUTH_TOKEN) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+  const token =
+    req.headers.authorization?.replace("Bearer ", "") ||
+    req.query.access_token ||
+    null;
+  if (MCP_AUTH_TOKEN && token !== MCP_AUTH_TOKEN) {
+    log("❌ Unauthorized access attempt", req.path, token);
+    return res.status(401).json({ error: "Unauthorized" });
   }
   next();
 });
 
-// ────────────────────────────────────────────────
-//  HEALTH ENDPOINT
-// ────────────────────────────────────────────────
+// ───────────────────────────────
+// Health check endpoint
+// ───────────────────────────────
 app.get("/health", (req, res) => {
-  res.status(200).json({
+  res.json({
     status: "ok",
-    message: "Airtable MCP server healthy",
+    message: "Airtable MCP server is healthy and reachable",
     timestamp: new Date().toISOString(),
   });
 });
 
-// ────────────────────────────────────────────────
-//  TOOL DISCOVERY
-// ────────────────────────────────────────────────
-app.get("/tools", (req, res) => {
-  res.json({
-    tools: [
-      {
-        name: "listBases",
-        description: "Fetches all Airtable bases available to the API key.",
-        input_schema: {},
-        output_schema: { type: "object" },
-      },
-      {
-        name: "getRecords",
-        description: "Fetch records from a specific Airtable base and table.",
-        input_schema: {
-          type: "object",
-          properties: {
-            baseId: { type: "string" },
-            tableName: { type: "string" },
-          },
-          required: ["baseId", "tableName"],
-        },
-        output_schema: { type: "object" },
-      },
-    ],
-  });
-});
-
-// ────────────────────────────────────────────────
-//  TOOL EXECUTION
-// ────────────────────────────────────────────────
-app.post("/run", async (req, res) => {
-  const { tool, arguments: args } = req.body || {};
-  console.log(`🔧 Tool requested: ${tool}`, args);
-
-  try {
-    if (tool === "listBases") {
-      const r = await fetch("https://api.airtable.com/v0/meta/bases", {
-        headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-      });
-      return res.json({ result: await r.json() });
-    }
-
-    if (tool === "getRecords") {
-      const { baseId, tableName } = args;
-      const r = await fetch(
-        `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`,
-        { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` } }
-      );
-      return res.json({ result: await r.json() });
-    }
-
-    res.status(400).json({ error: `Unknown tool '${tool}'` });
-  } catch (e) {
-    console.error("❌ Error running tool:", e);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ────────────────────────────────────────────────
-//  SSE STREAM  (Claude / Make handshake + keep-alive)
-// ────────────────────────────────────────────────
-app.all("/sse", (req, res) => {
-  console.log("🧠 [MCP] Client connected to /sse");
-  console.log("🔹 Method:", req.method);
-  console.log("🔹 Headers:", req.headers);
+// ───────────────────────────────
+// JSON-RPC over SSE (core MCP transport)
+// ───────────────────────────────
+app.all(["/sse", "/mcp/api/v1/sse"], (req, res) => {
+  log("🧠 [MCP] Client connected to SSE");
+  log("🔹 Method:", req.method);
+  log("🔹 Headers:", req.headers);
 
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
   });
-
-  // log when headers have been sent
   res.flushHeaders?.();
-  console.log("📡 [MCP] Response headers flushed to client");
+  log("📡 [MCP] SSE headers flushed to client");
 
-  // ---- Handshake message ----
-  const handshake = `data: {"jsonrpc":"2.0","method":"handshake","params":{"protocol":"MCP","version":"1.0"}}\n\n`;
-  console.log("📤 [MCP] Sending handshake:", handshake.trim());
-  res.write(handshake);
-
-  // ---- Keep-alive ping ----
-  const sendPing = () => {
-    const ping = `data: {"jsonrpc":"2.0","method":"ping","params":{"t":${Date.now()}}}\n\n`;
-    res.write(ping);
-    console.log("📤 [MCP] Sent ping:", ping.trim());
+  // ───────────── Handshake ─────────────
+  const handshake = {
+    jsonrpc: "2.0",
+    id: 0,
+    result: {
+      type: "handshake",
+      protocol: "MCP",
+      version: "1.0",
+      capabilities: { tools: true, run: true },
+    },
   };
-  const interval = setInterval(sendPing, 5000);
+  const payload = `data: ${JSON.stringify(handshake)}\n\n`;
+  res.write(payload);
+  log("📤 [MCP] Sent handshake:", payload.trim());
 
-  // ---- Capture any incoming data (if Make writes anything) ----
-  req.on("data", chunk => {
-    console.log("📥 [MCP] Received data from client:", chunk.toString());
+  // ───────────── Keepalive pings ─────────────
+  const interval = setInterval(() => {
+    const ping = {
+      jsonrpc: "2.0",
+      method: "ping",
+      params: { t: Date.now() },
+    };
+    const pingPayload = `data: ${JSON.stringify(ping)}\n\n`;
+    res.write(pingPayload);
+    log("📤 [MCP] Sent ping:", pingPayload.trim());
+  }, 10000);
+
+  // ───────────── Incoming messages ─────────────
+  req.on("data", async (chunk) => {
+    const raw = chunk.toString().trim();
+    log("📥 [MCP] Received from client:", raw);
+    try {
+      const msg = JSON.parse(raw);
+
+      // 1️⃣ Respond to list_tools
+      if (msg.method === "list_tools") {
+        const reply = {
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: {
+            tools: [
+              {
+                name: "listBases",
+                description: "Fetches Airtable bases via API",
+                input_schema: {},
+                output_schema: { type: "object" },
+              },
+              {
+                name: "getRecords",
+                description: "Fetches records from a base/table",
+                input_schema: {
+                  type: "object",
+                  properties: {
+                    baseId: { type: "string" },
+                    tableName: { type: "string" },
+                  },
+                  required: ["baseId", "tableName"],
+                },
+                output_schema: { type: "object" },
+              },
+            ],
+          },
+        };
+        res.write(`data: ${JSON.stringify(reply)}\n\n`);
+        log("📤 [MCP] Sent list_tools response:", reply);
+      }
+
+      // 2️⃣ Respond to run tool
+      else if (msg.method === "run" && msg.params?.tool) {
+        const { tool, arguments: args } = msg.params;
+        log("🔧 [MCP] Running tool:", tool, args);
+
+        let result;
+        if (tool === "listBases") {
+          const r = await fetch("https://api.airtable.com/v0/meta/bases", {
+            headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+          });
+          result = await r.json();
+        } else if (tool === "getRecords") {
+          const { baseId, tableName } = args;
+          const r = await fetch(
+            `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`,
+            { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` } }
+          );
+          result = await r.json();
+        } else {
+          result = { error: `Unknown tool: ${tool}` };
+        }
+
+        const reply = { jsonrpc: "2.0", id: msg.id, result };
+        res.write(`data: ${JSON.stringify(reply)}\n\n`);
+        log("📤 [MCP] Sent run response:", reply);
+      } else {
+        log("⚠️ [MCP] Unknown or unhandled method:", msg.method);
+      }
+    } catch (err) {
+      log("❌ [MCP] Failed to parse JSON-RPC message:", err);
+    }
   });
 
-  // ---- Monitor network lifecycle ----
-  req.on("aborted", () => console.log("⚠️ [MCP] Client aborted connection"));
-  req.on("error", err => console.error("❌ [MCP] Request error:", err));
-  res.on("error", err => console.error("❌ [MCP] Response error:", err));
-  res.on("close", () => console.log("🚪 [MCP] Response closed"));
+  // ───────────── Connection lifecycle ─────────────
+  req.on("aborted", () => log("⚠️ [MCP] Client aborted connection"));
+  req.on("error", (err) => log("❌ [MCP] Request error:", err));
+  res.on("error", (err) => log("❌ [MCP] Response error:", err));
   req.on("close", () => {
     clearInterval(interval);
-    console.log("❌ [MCP] Client disconnected from /sse");
+    log("❌ [MCP] Client disconnected from SSE");
   });
 });
 
+// ───────────────────────────────
+// Root sanity check
+// ───────────────────────────────
+app.get("/", (req, res) => res.send("✅ Airtable MCP server (Make.com compatible) running."));
 
-
-
-// ────────────────────────────────────────────────
-//  ROOT CHECK
-// ────────────────────────────────────────────────
-app.get("/", (req, res) => {
-  res.send("✅ Airtable MCP server live (root-level endpoints).");
-});
-
+// ───────────────────────────────
+// Start server
+// ───────────────────────────────
 app.listen(port, () => {
-  console.log(`🚀 Root-level MCP server running on port ${port}`);
+  log(`🚀 MCP server listening on port ${port}`);
 });
