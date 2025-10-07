@@ -27,7 +27,7 @@ app.use((req, res, next) => {
   if (MCP_AUTH_TOKEN && authHeader !== `Bearer ${MCP_AUTH_TOKEN}`) {
     return res.status(401).json({ 
       jsonrpc: "2.0",
-      id: req.body?.id || "unknown",
+      id: req.body?.id || "auth_error",
       error: { code: -32001, message: "Unauthorized" }
     });
   }
@@ -53,7 +53,7 @@ app.post("/", async (req, res) => {
   if (jsonrpc !== "2.0") {
     return res.status(400).json({
       jsonrpc: "2.0",
-      id: id || "invalid_request",
+      id: id || "invalid_jsonrpc",
       error: { code: -32600, message: "Invalid Request - jsonrpc must be '2.0'" }
     });
   }
@@ -61,24 +61,19 @@ app.post("/", async (req, res) => {
   if (!method || typeof method !== 'string') {
     return res.status(400).json({
       jsonrpc: "2.0",
-      id: id || "invalid_request", 
+      id: id || "invalid_method",
       error: { code: -32600, message: "Invalid Request - method is required" }
     });
   }
 
-  // Validate that id is present and not null (MCP requirement)
-  if (id === null || id === undefined) {
-    return res.status(400).json({
-      jsonrpc: "2.0",
-      id: "missing_id",
-      error: { code: -32600, message: "Invalid Request - id must be string or number, not null" }
-    });
-  }
+  // Handle notifications (requests without id) - MCP typically expects id, but we'll be flexible
+  const isNotification = id === undefined;
+  const requestId = isNotification ? `notification_${Date.now()}` : id;
+
+  console.log(`🛠 Handling method: ${method} (${isNotification ? 'notification' : 'request'}) with id: ${requestId}`);
 
   try {
     let result;
-
-    console.log(`🛠 Handling method: ${method} with id: ${id}`);
 
     switch (method) {
       case "initialize":
@@ -191,17 +186,29 @@ app.post("/", async (req, res) => {
         break;
 
       default:
+        // For notifications, we shouldn't send a response according to JSON-RPC spec
+        if (isNotification) {
+          console.log(`📝 Notification for unknown method: ${method} - not responding`);
+          return res.status(204).send(); // No Content
+        }
+        
         return res.status(400).json({
           jsonrpc: "2.0",
-          id: id,
+          id: requestId,
           error: { code: -32601, message: `Method not found: ${method}` }
         });
     }
 
-    // Always return the same id as the request
+    // For notifications, we should not send a response according to JSON-RPC spec
+    if (isNotification) {
+      console.log("📝 Notification processed - not sending response");
+      return res.status(204).send(); // No Content
+    }
+
+    // For regular requests, send the response with the original id
     const response = { 
       jsonrpc: "2.0", 
-      id: id,  // This must exactly match the request id 
+      id: requestId,
       result 
     };
     
@@ -210,9 +217,16 @@ app.post("/", async (req, res) => {
 
   } catch (err) {
     console.error("❌ Error processing request:", err);
+    
+    // For notifications, don't send error responses
+    if (isNotification) {
+      console.log("📝 Error in notification - not sending error response");
+      return res.status(204).send();
+    }
+    
     res.status(500).json({
       jsonrpc: "2.0",
-      id: id,  // Always preserve the request id
+      id: requestId,
       error: { 
         code: -32603, 
         message: "Internal error",
