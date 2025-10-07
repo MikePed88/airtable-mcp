@@ -194,4 +194,25 @@ app.post("/", async (req, res) => {
     res.json(response);
 
   } catch (err) {
-    console.error("❌ Error processing request:", err
+    console.error("❌ Error processing request:", err);
+    res.status(500).json({
+      jsonrpc: "2.0",
+      id: id || null,
+      error: { 
+        code: -32603, 
+        message: "Internal error",
+        data: err.message 
+      }
+    });
+  }
+});
+
+// Root GET for basic info
+app.get("/", (req, res) => {
+  res.send("✅ Airtable MCP Server running (Make.com compatible)");
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 MCP server running on port ${PORT}`);
+  console.log(`📍 Health check: http://localhost:${PORT}/health`);
+});
