@@ -17,7 +17,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Auth middleware - only for MCP endpoints
+// Auth middleware
 app.use((req, res, next) => {
   if (req.path === "/health" || req.method === "GET") {
     return next();
@@ -27,14 +27,14 @@ app.use((req, res, next) => {
   if (MCP_AUTH_TOKEN && authHeader !== `Bearer ${MCP_AUTH_TOKEN}`) {
     return res.status(401).json({ 
       jsonrpc: "2.0",
-      id: null,
+      id: req.body?.id || "unknown",
       error: { code: -32001, message: "Unauthorized" }
     });
   }
   next();
 });
 
-// Main MCP endpoint - Handle JSON-RPC requests
+// Main MCP endpoint
 app.post("/", async (req, res) => {
   console.log("📥 Received MCP request:", JSON.stringify(req.body, null, 2));
   
@@ -42,7 +42,7 @@ app.post("/", async (req, res) => {
   if (!req.body || typeof req.body !== 'object') {
     return res.status(400).json({
       jsonrpc: "2.0",
-      id: null,
+      id: "parse_error",
       error: { code: -32700, message: "Parse error" }
     });
   }
@@ -53,7 +53,7 @@ app.post("/", async (req, res) => {
   if (jsonrpc !== "2.0") {
     return res.status(400).json({
       jsonrpc: "2.0",
-      id: id || null,
+      id: id || "invalid_request",
       error: { code: -32600, message: "Invalid Request - jsonrpc must be '2.0'" }
     });
   }
@@ -61,15 +61,24 @@ app.post("/", async (req, res) => {
   if (!method || typeof method !== 'string') {
     return res.status(400).json({
       jsonrpc: "2.0",
-      id: id || null,
+      id: id || "invalid_request", 
       error: { code: -32600, message: "Invalid Request - method is required" }
+    });
+  }
+
+  // Validate that id is present and not null (MCP requirement)
+  if (id === null || id === undefined) {
+    return res.status(400).json({
+      jsonrpc: "2.0",
+      id: "missing_id",
+      error: { code: -32600, message: "Invalid Request - id must be string or number, not null" }
     });
   }
 
   try {
     let result;
 
-    console.log(`🛠 Handling method: ${method}`);
+    console.log(`🛠 Handling method: ${method} with id: ${id}`);
 
     switch (method) {
       case "initialize":
@@ -184,12 +193,18 @@ app.post("/", async (req, res) => {
       default:
         return res.status(400).json({
           jsonrpc: "2.0",
-          id: id || null,
+          id: id,
           error: { code: -32601, message: `Method not found: ${method}` }
         });
     }
 
-    const response = { jsonrpc: "2.0", id: id || null, result };
+    // Always return the same id as the request
+    const response = { 
+      jsonrpc: "2.0", 
+      id: id,  // This must exactly match the request id 
+      result 
+    };
+    
     console.log("📤 Sending response:", JSON.stringify(response, null, 2));
     res.json(response);
 
@@ -197,7 +212,7 @@ app.post("/", async (req, res) => {
     console.error("❌ Error processing request:", err);
     res.status(500).json({
       jsonrpc: "2.0",
-      id: id || null,
+      id: id,  // Always preserve the request id
       error: { 
         code: -32603, 
         message: "Internal error",
