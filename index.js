@@ -83,6 +83,18 @@ app.get("/tools", (req, res) => {
         },
         output_schema: { type: "object" },
       },
+      {
+        name: "listTables",
+        description: "Fetches tables and their IDs from a specific Airtable base.",
+        input_schema: {
+          type: "object",
+          properties: {
+            baseId: { type: "string" },
+          },
+          required: ["baseId"],
+        },
+        output_schema: { type: "object" },
+      },
     ],
   });
 });
@@ -191,6 +203,19 @@ app.post("/run", async (req, res) => {
       const data = await response.json();
       return res.status(200).json({ result: data });
     }
+    if (tool === "listTables") {
+      const { baseId } = args || {};
+      if (!baseId) return res.status(400).json({ error: "Missing baseId" });
+
+      const response = await fetch(
+        `https://api.airtable.com/v0/meta/bases/${baseId}/tables`,
+        { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` } }
+      );
+
+      const data = await response.json();
+      return res.status(200).json({ result: data });
+    }
+    
 
     res.status(400).json({ error: `Unknown tool '${tool}'` });
   } catch (err) {
