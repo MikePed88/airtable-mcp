@@ -124,17 +124,15 @@ app.get("/sse", (req, res) => {
   // Send Make-compatible handshake
   const handshake = {
     jsonrpc: "2.0",
-    id: 0,
-    result: {
-      type: "handshake",
-      protocol: "MCP",
-      protocolVersion: "1.0",
+    method: "handshake",
+    params: {
+      protocolVersion: "2024-11-05",
       serverInfo: {
         name: "Airtable MCP Server",
         version: "0.3.0",
       },
       capabilities: {
-        tools: {},
+        tools: { list: true, execute: true },
         resources: {},
         logging: {},
       },
@@ -160,29 +158,25 @@ app.get("/sse", (req, res) => {
 // Mirror GET /sse for Make’s POST /sse handshake
 app.post("/sse", (req, res) => {
   console.log("🧠 [MCP] Client connected via POST /sse");
-  console.log("🔹 Headers:", req.headers);
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders?.();
 
-  console.log("📡 [MCP] SSE headers flushed (POST)");
+  console.log("📡 [MCP] SSE headers flushed");
 
-  // Send Make-compatible handshake
   const handshake = {
     jsonrpc: "2.0",
-    id: 0,
-    result: {
-      type: "handshake",
-      protocol: "MCP",
-      protocolVersion: "1.0",
+    method: "handshake",
+    params: {
+      protocolVersion: "2024-11-05",
       serverInfo: {
         name: "Airtable MCP Server",
         version: "0.3.0",
       },
       capabilities: {
-        tools: {},
+        tools: { list: true, execute: true },
         resources: {},
         logging: {},
       },
@@ -191,16 +185,15 @@ app.post("/sse", (req, res) => {
 
   res.write(`event: message\n`);
   res.write(`data: ${JSON.stringify(handshake)}\n\n`);
-  console.log("📤 Sent Make-compliant handshake (POST)");
+  console.log("📤 Sent Make handshake:", JSON.stringify(handshake));
 
-  // Keep-alive pings
   const interval = setInterval(() => {
     res.write(`event: ping\n`);
     res.write(`data: ${JSON.stringify({ ts: new Date().toISOString() })}\n\n`);
   }, 15000);
 
   req.on("close", () => {
-    console.log("❌ [MCP] POST /sse client disconnected");
+    console.log("❌ [MCP] Client disconnected from /sse");
     clearInterval(interval);
   });
 });
