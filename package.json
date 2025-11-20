@@ -15,12 +15,12 @@
     "prepare": "npm run build",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
-    "start": "node build/ws-server.js",
+    "start": "node build/http-mcp-server.js",
     "ws": "node build/ws-server.js",
     "stdio": "node build/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.6.0",
+    "@modelcontextprotocol/sdk": "^1.22.0",
     "axios": "^1.7.9",
     "cors": "^2.8.5",
     "express": "^5.1.0",
@@ -28,6 +28,7 @@
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
+    "@types/express": "^5.0.5",
     "@types/node": "^20.11.24",
     "typescript": "^5.3.3"
   },
