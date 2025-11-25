@@ -46,6 +46,14 @@ const properties = [
   // Add more properties here as you grow.
 ];
 
+// Optional: a central "Properties" table to pull property metadata
+const propertiesTableConfig = {
+  baseId: process.env.AIRTABLE_PROPERTY_BASE_ID || "appZjxFyoaNUFlwCT",
+  tableName: "Properties",
+  // When undefined, fetch all fields from the table.
+  allowedFields: undefined as string[] | undefined,
+};
+
 // Basic request limits
 const MAX_RECORDS = 50;
 const DEFAULT_RANGE_DAYS = 31;
@@ -381,6 +389,37 @@ server.registerTool(
 
     const contacts = pickFields(resp.data.records, table.allowedFields);
     const output = { contacts };
+    return {
+      content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+      structuredContent: output,
+    };
+  }
+);
+
+// TOOL: list_properties_table
+server.registerTool(
+  "list_properties_table",
+  {
+    title: "List properties table",
+    description: "Return records from the central Properties table",
+    inputSchema: { max_records: z.number().int().positive().max(MAX_RECORDS).optional() },
+    outputSchema: { properties: z.any() },
+  },
+  async ({ max_records }) => {
+    const table = propertiesTableConfig;
+    const resp = await fetchTable({
+      baseId: table.baseId,
+      tableName: table.tableName,
+      maxRecords: max_records || MAX_RECORDS,
+      fields: table.allowedFields,
+    });
+
+    // If no allowlist is provided, return all fields.
+    const props =
+      table.allowedFields && table.allowedFields.length
+        ? pickFields(resp.data.records, table.allowedFields)
+        : resp.data.records;
+    const output = { properties: props };
     return {
       content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
       structuredContent: output,
