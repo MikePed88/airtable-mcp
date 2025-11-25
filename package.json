@@ -15,7 +15,7 @@
     "prepare": "npm run build",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
-    "start": "node -r dotenv/config build/http-mcp-server.js",
+    "start": "node build/http-mcp-server.js",
     "ws": "node build/ws-server.js",
     "stdio": "node build/index.js"
   },
