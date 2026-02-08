@@ -6,12 +6,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
-const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-if (!AIRTABLE_API_KEY) throw new Error("AIRTABLE_API_KEY env var is required");
-const MCP_BEARER_TOKEN = process.env.MCP_BEARER_TOKEN;
-if (!MCP_BEARER_TOKEN) {
-  throw new Error("MCP_BEARER_TOKEN env var is required");
+function getRequiredEnvVar(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} env var is required`);
+  }
+  return value;
 }
+const AIRTABLE_API_KEY = getRequiredEnvVar("AIRTABLE_API_KEY");
+const MCP_BEARER_TOKEN = getRequiredEnvVar("MCP_BEARER_TOKEN");
 
 // Configure your bases and tables here.
 // Replace the example base/table names with your actual schema.
