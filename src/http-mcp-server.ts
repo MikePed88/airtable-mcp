@@ -1,12 +1,17 @@
 // src/http-mcp-server.ts
 import express from "express";
 import axios from "axios";
+import { timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 if (!AIRTABLE_API_KEY) throw new Error("AIRTABLE_API_KEY env var is required");
+const MCP_BEARER_TOKEN = process.env.MCP_BEARER_TOKEN;
+if (!MCP_BEARER_TOKEN) {
+  throw new Error("MCP_BEARER_TOKEN env var is required");
+}
 
 // Configure your bases and tables here.
 // Replace the example base/table names with your actual schema.
@@ -433,8 +438,27 @@ server.registerTool(
 const app = express();
 app.use(express.json());
 
+function isAuthorizedBearerToken(headerValue: string | undefined): boolean {
+  if (!headerValue?.startsWith("Bearer ")) return false;
+  const providedToken = headerValue.slice("Bearer ".length).trim();
+  const expectedBuffer = Buffer.from(MCP_BEARER_TOKEN, "utf8");
+  const providedBuffer = Buffer.from(providedToken, "utf8");
+
+  if (expectedBuffer.length !== providedBuffer.length) return false;
+  return timingSafeEqual(expectedBuffer, providedBuffer);
+}
+
 app.post("/mcp", async (req, res) => {
   try {
+    if (!isAuthorizedBearerToken(req.header("authorization"))) {
+      res.setHeader("WWW-Authenticate", 'Bearer realm="mcp"');
+      return res.status(401).json({
+        jsonrpc: "2.0",
+        error: { code: -32001, message: "Unauthorized" },
+        id: null,
+      });
+    }
+
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // stateless, 1 transport per HTTP request
       enableJsonResponse: true,
